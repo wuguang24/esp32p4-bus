@@ -1,0 +1,53 @@
+================================================================================
+  ESP32P4_BUS_ANALYZER  软件架构说明
+  更新日期：2026-09-04
+================================================================================
+
+一、启动顺序（main.c）
+--------------------------------------------------------------------------------
+  NVS → wifi_bringup → lvgl_demo → bus_app_start → bus_stream_start
+
+
+二、模块
+--------------------------------------------------------------------------------
+  main/bus/
+    bus_pins.h      引脚与速率（TJA1050 / TP8485E 上限）
+    bus_can.c       TWAI CAN
+    bus_rs485.c     UART1 + DE32
+    bus_uart.c      UART2 TTL
+    bus_i2c.c       I2C1 主机
+    bus_spi.c       SPI2 主机（CS=12）
+    bus_capture.c   统一环形缓冲 + 统计
+    bus_logger.c    SD CSV 落盘
+    bus_app.c       总控
+
+  main/siggen/
+    siggen_pwm.c    LEDC PWM → GPIO11
+
+  main/adc/
+    bus_adc.c       ADC1_CH4 → GPIO20（参考慧勤 10_adc）
+
+  main/net/
+    wifi_bringup    Hosted SoftAP/STA
+    bus_stream      BUS1 UDP :9527
+
+  main/ui/
+    ui_shell        顶栏 + 五页底栏
+    overview/bus/uart/io(含PWM·ADC)/setup
+
+
+三、数据流
+--------------------------------------------------------------------------------
+  总线 RX 任务 → bus_capture_push
+       ├─ UI 定时刷新 snapshot
+       ├─ bus_logger 增量写 SD
+       └─ bus_stream 配对后 UDP FRAME/TELEM
+
+
+四、引脚摘要
+--------------------------------------------------------------------------------
+  CAN 33/34 | RS485 30/31/32 | UART 9/10 | I2C 7/8
+  SPI 26/27/6/CS12 | PWM 11 | ADC 20
+  详见 docs/接线表.txt
+
+================================================================================

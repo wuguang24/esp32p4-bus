@@ -1,0 +1,74 @@
+dependencies:
+  espressif/eppp_link:
+    component_hash: c1369b37f2b0b427b198ae14e07e7547d3da92b95fe4dc7f949e5de560b35f21
+    dependencies:
+    - name: espressif/esp_serial_slave_link
+      registry_url: https://components.espressif.com
+      require: private
+      version: ^1.1.0
+    - name: idf
+      require: private
+      version: '>=5.2'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.1.6
+  espressif/esp_hosted:
+    component_hash: 6f5dc62f18c86b4ac65e1c8cb56fe122de894d80b8c8eaac451f3c0a913b8d76
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 2.11.5
+  espressif/esp_serial_slave_link:
+    component_hash: ac1776806de0a6e371c84e87898bb983e19ce62aa7f1e2e5c4a3b0234a575d2c
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.1.2
+  espressif/esp_wifi_remote:
+    component_hash: 3bfd774b8218b56f905f0484b7731cfbac7c9d19a3a96bf4def5a7769ce0168e
+    dependencies:
+    - name: espressif/eppp_link
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=0.1'
+    - name: espressif/esp_hosted
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: target in [esp32h2, esp32p4]
+      version: '>=0.0.6'
+    - name: idf
+      require: private
+      version: '>=5.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.15.0
+  idf:
+    source:
+      type: idf
+    version: 6.0.2
+  lvgl/lvgl:
+    component_hash: 184e532558c1c45fefed631f3e235423d22582aafb4630f3e8885c35281a49ae
+    dependencies: []
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 9.5.0
+direct_dependencies:
+- espressif/esp_hosted
+- espressif/esp_wifi_remote
+- idf
+- lvgl/lvgl
+manifest_hash: 343378f90f0183ebad7cd99cdb5d26bd18eeab7d37015e8f1a6e4f48e6351205
+target: esp32p4
+version: 3.0.0

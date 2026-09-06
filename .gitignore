@@ -1,0 +1,37 @@
+# ESP-IDF
+build/
+sdkconfig.old
+sdkconfig.ci
+dependencies.lock.bak
+
+# Component manager downloads (restored via idf.py / dependencies.lock)
+managed_components/
+
+# Tooling / IDE
+.vscode/
+.idea/
+*.code-workspace
+.devcontainer/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*~
+*.tmp
+*.bak
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Flash / debug artifacts
+*.bin
+*.elf
+*.map
+*.hex
+flash_args
+bootloader/
+partition_table/
