@@ -12,6 +12,7 @@
 #include "bus_uart.h"
 #include "bus_i2c.h"
 #include "wifi_bringup.h"
+#include "bus_cli.h"
 
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -19,6 +20,7 @@
 #include "lwip/inet.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -52,6 +54,19 @@ static void send_pkt(uint8_t type, const void *payload, uint16_t plen)
     }
     sendto(s_sock, buf, sizeof(bus1_hdr_t) + plen, 0,
            (struct sockaddr *)&s_peer, sizeof(s_peer));
+}
+
+static void cli_text_out(const char *line, void *user)
+{
+    (void)user;
+    if (!line) {
+        return;
+    }
+    size_t n = strlen(line);
+    if (n > 120) {
+        n = 120;
+    }
+    send_pkt(BUS1_TYPE_TEXT, line, (uint16_t)n);
 }
 
 static void handle_cmd(const bus1_cmd_t *c)
@@ -94,7 +109,25 @@ static void handle_cmd(const bus1_cmd_t *c)
         break;
     case BUS1_CMD_I2C_SCAN: {
         uint8_t found[32];
-        (void)bus_i2c_scan(found, 32);
+        int n = bus_i2c_scan(found, 32);
+        char line[96];
+        size_t p = (size_t)snprintf(line, sizeof(line), "i2c %d:", n);
+        for (int i = 0; i < n && p + 4 < sizeof(line); i++) {
+            p += (size_t)snprintf(line + p, sizeof(line) - p, " %02X", found[i]);
+        }
+        send_pkt(BUS1_TYPE_TEXT, line, (uint16_t)strlen(line));
+        break;
+    }
+    case BUS1_CMD_CLI: {
+        char cmd[65];
+        size_t n = c->dlen;
+        if (n > 64) {
+            n = 64;
+        }
+        memcpy(cmd, c->data, n);
+        cmd[n] = '\0';
+        int rc = bus_cli_exec(cmd, cli_text_out, NULL);
+        err = (rc == 0) ? ESP_OK : ESP_FAIL;
         break;
     }
     default:

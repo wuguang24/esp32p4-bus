@@ -8,6 +8,7 @@
 #include "ui_numpad.h"
 #include "bus_app.h"
 #include "bus_pins.h"
+#include "bus_tools.h"
 #include "wifi_bringup.h"
 #include <stdio.h>
 #include <string.h>
@@ -179,6 +180,27 @@ static void on_can_cycle(lv_event_t *e)
     paint_all();
 }
 
+static void on_can_auto(lv_event_t *e)
+{
+    (void)e;
+    if (s_sp.lbl_can) {
+        ui_label_set_if_changed(s_sp.lbl_can, "CAN 探测中…");
+    }
+    uint32_t baud = 0;
+    esp_err_t err = bus_tools_can_autodetect(&baud, 180);
+    char buf[40];
+    if (err == ESP_OK) {
+        snprintf(buf, sizeof(buf), "CAN %lu OK", (unsigned long)baud);
+    } else if (err == ESP_ERR_NOT_FOUND) {
+        snprintf(buf, sizeof(buf), "CAN 无信号 %lu", (unsigned long)baud);
+    } else {
+        snprintf(buf, sizeof(buf), "CAN 探测失败");
+    }
+    if (s_sp.lbl_can) {
+        ui_label_set_if_changed(s_sp.lbl_can, buf);
+    }
+}
+
 static void on_rs_edit(lv_event_t *e)
 {
     (void)e;
@@ -195,6 +217,36 @@ static void on_rs_cycle(lv_event_t *e)
     bus_app_get_status(&st);
     (void)bus_app_set_rs485_baud(next_preset(s_rs_presets,
         sizeof(s_rs_presets) / sizeof(s_rs_presets[0]), st.rs485_baud));
+    paint_all();
+}
+
+static void on_rs_auto(lv_event_t *e)
+{
+    (void)e;
+    if (s_sp.lbl_rs) {
+        ui_label_set_if_changed(s_sp.lbl_rs, "485 探测中…");
+    }
+    uint32_t baud = 0;
+    bus_rs485_parity_t p = BUS_RS485_PARITY_NONE;
+    esp_err_t err = bus_tools_rs485_autodetect(&baud, &p, 100);
+    char buf[48];
+    if (err == ESP_OK) {
+        snprintf(buf, sizeof(buf), "485 %lu OK", (unsigned long)baud);
+    } else if (err == ESP_ERR_NOT_FOUND) {
+        snprintf(buf, sizeof(buf), "485 无信号 %lu", (unsigned long)baud);
+    } else {
+        snprintf(buf, sizeof(buf), "485 探测失败");
+    }
+    if (s_sp.lbl_rs) {
+        ui_label_set_if_changed(s_sp.lbl_rs, buf);
+    }
+    paint_all();
+}
+
+static void on_cfg_reset(lv_event_t *e)
+{
+    (void)e;
+    (void)bus_app_settings_reset();
     paint_all();
 }
 
@@ -375,7 +427,8 @@ static lv_obj_t *make_small(lv_obj_t *row, const char *txt, lv_event_cb_t cb)
 {
     lv_obj_t *b = lv_button_create(row);
     ui_style_chip_btn(b, false);
-    lv_obj_set_size(b, 44, 30);
+    int32_t w = (txt && strlen(txt) > 2) ? 52 : 44;
+    lv_obj_set_size(b, w, 30);
     lv_obj_t *lb = lv_label_create(b);
     lv_label_set_text(lb, txt);
     lv_obj_set_style_text_font(lb, UI_FONT_CN, 0);
@@ -404,7 +457,7 @@ lv_obj_t *ui_page_setup_create(lv_obj_t *parent)
     lv_obj_set_style_text_color(s_sp.lbl_info, ui_color(UI_COL_TEXT_DIM), 0);
     lv_label_set_long_mode(s_sp.lbl_info, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(s_sp.lbl_info, lv_pct(100));
-    lv_label_set_text(s_sp.lbl_info, "点按改值 · 档=循环预设");
+    lv_label_set_text(s_sp.lbl_info, "改参自动记忆 · 点「默认」恢复出厂");
 
     lv_obj_t *row1 = ui_make_toolbar(s_sp.root, 32);
     lv_obj_t *l1 = lv_label_create(row1);
@@ -427,10 +480,12 @@ lv_obj_t *ui_page_setup_create(lv_obj_t *parent)
     r = make_row(s_sp.root);
     make_btn(r, &s_sp.lbl_can, 1, on_can_edit, true);
     make_small(r, "档", on_can_cycle);
+    make_small(r, "AUTO", on_can_auto);
 
     r = make_row(s_sp.root);
     make_btn(r, &s_sp.lbl_rs, 1, on_rs_edit, false);
     make_small(r, "档", on_rs_cycle);
+    make_small(r, "AUTO", on_rs_auto);
     make_btn(r, &s_sp.lbl_rs_p, 1, on_rs_parity, false);
 
     r = make_row(s_sp.root);
@@ -457,6 +512,7 @@ lv_obj_t *ui_page_setup_create(lv_obj_t *parent)
     r = make_row(s_sp.root);
     make_btn(r, &s_sp.lbl_sd, 1, on_sd_remount, false);
     make_small(r, "重挂", on_sd_remount);
+    make_small(r, "默认", on_cfg_reset);
 
     paint_all();
     paint_wifi();

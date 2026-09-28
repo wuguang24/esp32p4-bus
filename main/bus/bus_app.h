@@ -60,6 +60,11 @@ esp_err_t bus_app_set_listen(bool listen_only);
 esp_err_t bus_app_set_allow_tx(bool allow);
 esp_err_t bus_app_set_can_filter(bool enable, uint32_t id, uint32_t mask, bool ext);
 
+/** 将当前总线参数写入 NVS（改波特率等后会自动调用） */
+esp_err_t bus_app_settings_save(void);
+/** 恢复出厂默认并重启各总线 */
+esp_err_t bus_app_settings_reset(void);
+
 esp_err_t bus_app_logger_start(void);
 esp_err_t bus_app_logger_stop(void);
 

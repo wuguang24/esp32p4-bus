@@ -1,6 +1,6 @@
 /**
  * @file ui_page_io.c
- * @brief I2C / SPI / PWM / ADC — 扩展页
+ * @brief I2C / SPI / PWM / ADC / DIO / 1-Wire — 扩展页
  */
 
 #include "ui_pages.h"
@@ -11,6 +11,9 @@
 #include "bus_spi.h"
 #include "bus_app.h"
 #include "bus_capture.h"
+#include "bus_tools.h"
+#include "bus_dio.h"
+#include "bus_onewire.h"
 #include "siggen_pwm.h"
 #include "bus_adc.h"
 #include "ui_numpad.h"
@@ -22,6 +25,8 @@ enum {
     IO_TAB_SPI,
     IO_TAB_PWM,
     IO_TAB_ADC,
+    IO_TAB_DIO,
+    IO_TAB_OW,
 };
 
 typedef struct {
@@ -49,6 +54,9 @@ typedef struct {
     lv_obj_t *bar_adc;
     lv_obj_t *chart_adc;
     lv_chart_series_t *ser_adc;
+
+    lv_obj_t *lbl_dio;
+    lv_obj_t *lbl_ow;
 
     lv_obj_t *lbl_i2c_cmp;
     lv_obj_t *lbl_spi_cmp;
@@ -97,6 +105,147 @@ static void on_scan(lv_event_t *e)
     (void)e;
     uint8_t found[24];
     (void)bus_i2c_scan(found, 24);
+}
+
+static void io_set_msg(const char *msg)
+{
+    if (s_io.kpi && msg) {
+        ui_label_set_if_changed(s_io.kpi, msg);
+    }
+}
+
+static void on_i2c_id(lv_event_t *e)
+{
+    (void)e;
+    char txt[160];
+    int n = bus_tools_i2c_identify(txt, sizeof(txt));
+    (void)n;
+    io_set_msg(txt);
+}
+
+static void on_i2c_dump(lv_event_t *e)
+{
+    (void)e;
+    /* 以 compose：址=设备，data[0]=寄存器，长=读取长度 */
+    uint8_t len = s_io.i2c_len ? s_io.i2c_len : 8;
+    if (len > 16) {
+        len = 16;
+    }
+    uint8_t buf[16];
+    uint16_t reg = s_io.i2c_data[0];
+    esp_err_t err = bus_tools_i2c_dump(s_io.i2c_addr, reg, 1, buf, len);
+    char msg[96];
+    if (err != ESP_OK) {
+        snprintf(msg, sizeof(msg), "DUMP 失败");
+    } else {
+        size_t p = (size_t)snprintf(msg, sizeof(msg), "D@%02X:%02X", s_io.i2c_addr, (unsigned)reg);
+        for (uint8_t i = 0; i < len && p + 3 < sizeof(msg); i++) {
+            p += (size_t)snprintf(msg + p, sizeof(msg) - p, " %02X", buf[i]);
+        }
+    }
+    io_set_msg(msg);
+}
+
+static void on_spi_jedec(lv_event_t *e)
+{
+    (void)e;
+    uint8_t id[3];
+    char name[56];
+    esp_err_t err = bus_tools_spi_jedec(id, name, sizeof(name));
+    if (err != ESP_OK) {
+        io_set_msg("JEDEC 失败");
+    } else {
+        io_set_msg(name);
+    }
+}
+
+static void on_spi_flash_rd(lv_event_t *e)
+{
+    (void)e;
+    uint32_t addr = 0;
+    if (s_io.spi_len >= 3) {
+        addr = ((uint32_t)s_io.spi_data[0] << 16) | ((uint32_t)s_io.spi_data[1] << 8) |
+               s_io.spi_data[2];
+    }
+    uint8_t buf[16];
+    esp_err_t err = bus_tools_spi_flash_read(addr, buf, 16);
+    char msg[96];
+    if (err != ESP_OK) {
+        snprintf(msg, sizeof(msg), "READ 失败");
+    } else {
+        size_t p = (size_t)snprintf(msg, sizeof(msg), "R%06lX", (unsigned long)addr);
+        for (int i = 0; i < 8 && p + 3 < sizeof(msg); i++) {
+            p += (size_t)snprintf(msg + p, sizeof(msg) - p, " %02X", buf[i]);
+        }
+    }
+    io_set_msg(msg);
+}
+
+static void dio_refresh(void)
+{
+    if (!s_io.lbl_dio) {
+        return;
+    }
+    char buf[64];
+    int v = bus_dio_read();
+    const char *m = "IN";
+    switch (bus_dio_get_mode()) {
+    case BUS_DIO_OUT: m = "OUT"; break;
+    case BUS_DIO_IN_PU: m = "PU"; break;
+    case BUS_DIO_IN_PD: m = "PD"; break;
+    default: break;
+    }
+    snprintf(buf, sizeof(buf), "GPIO%d %s = %d", (int)bus_dio_get_gpio(), m, v);
+    ui_label_set_if_changed(s_io.lbl_dio, buf);
+}
+
+static void on_dio_mode(lv_event_t *e)
+{
+    (void)e;
+    bus_dio_mode_t m = (bus_dio_mode_t)((bus_dio_get_mode() + 1) % 4);
+    (void)bus_dio_set_mode(m);
+    dio_refresh();
+}
+
+static void on_dio_read(lv_event_t *e)
+{
+    (void)e;
+    dio_refresh();
+}
+
+static void on_dio_hi(lv_event_t *e)
+{
+    (void)e;
+    (void)bus_dio_write(true);
+    dio_refresh();
+}
+
+static void on_dio_lo(lv_event_t *e)
+{
+    (void)e;
+    (void)bus_dio_write(false);
+    dio_refresh();
+}
+
+static void on_ow_scan(lv_event_t *e)
+{
+    (void)e;
+    (void)bus_ow_init(bus_dio_get_gpio());
+    uint8_t roms[4][8];
+    int n = bus_ow_search(roms, 4);
+    char msg[96];
+    if (n <= 0) {
+        snprintf(msg, sizeof(msg), "1W 无设备 GPIO%d", (int)bus_ow_get_gpio());
+    } else {
+        size_t p = (size_t)snprintf(msg, sizeof(msg), "1W %d:", n);
+        for (int i = 0; i < 8 && p + 3 < sizeof(msg); i++) {
+            p += (size_t)snprintf(msg + p, sizeof(msg) - p, "%02X", roms[0][i]);
+        }
+    }
+    if (s_io.lbl_ow) {
+        ui_label_set_if_changed(s_io.lbl_ow, msg);
+    }
+    io_set_msg(msg);
 }
 
 static void on_spi(lv_event_t *e)
@@ -477,6 +626,8 @@ static void build_bus_tab(lv_obj_t *tab, const char *btn_txt, bool primary,
         make_chip(comp, "长", 28, on_i2c_len, false);
         make_chip(comp, "写", 28, on_i2c_wr, true);
         make_chip(comp, "读", 28, on_i2c_rd, true);
+        make_chip(comp, "ID", 28, on_i2c_id, false);
+        make_chip(comp, "DUMP", 44, on_i2c_dump, true);
     } else if (src == BUS_SRC_SPI) {
         s_io.lbl_spi_cmp = lv_label_create(comp);
         lv_obj_set_flex_grow(s_io.lbl_spi_cmp, 1);
@@ -487,6 +638,8 @@ static void build_bus_tab(lv_obj_t *tab, const char *btn_txt, bool primary,
         make_chip(comp, "字", 28, on_spi_byte, false);
         make_chip(comp, "长", 28, on_spi_len, false);
         make_chip(comp, "发", 32, on_spi, true);
+        make_chip(comp, "JEDEC", 52, on_spi_jedec, false);
+        make_chip(comp, "READ", 44, on_spi_flash_rd, true);
     }
 
     ui_frame_list_init(list, tab);
@@ -527,7 +680,9 @@ lv_obj_t *ui_page_io_create(lv_obj_t *parent)
     lv_obj_t *ts = lv_tabview_add_tab(s_io.tv, "SPI");
     lv_obj_t *tp = lv_tabview_add_tab(s_io.tv, "PWM");
     lv_obj_t *ta = lv_tabview_add_tab(s_io.tv, "ADC");
-    ui_style_tabview(s_io.tv, 36);
+    lv_obj_t *td = lv_tabview_add_tab(s_io.tv, "DIO");
+    lv_obj_t *tw = lv_tabview_add_tab(s_io.tv, "1W");
+    ui_style_tabview(s_io.tv, 32);
 
     build_bus_tab(ti, "扫描", true, on_scan, on_hold_i2c, &s_io.list_i2c,
                   &s_io.scope_i2c, BUS_SRC_I2C, false);
@@ -623,8 +778,60 @@ lv_obj_t *ui_page_io_create(lv_obj_t *parent)
     lv_obj_set_style_text_font(ah, UI_FONT_NUM14, 0);
     lv_obj_set_style_text_color(ah, ui_color(UI_COL_TEXT_DIM), 0);
 
+    /* DIO */
+    lv_obj_set_style_pad_all(td, 6, 0);
+    lv_obj_set_flex_flow(td, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(td, 8, 0);
+    s_io.lbl_dio = lv_label_create(td);
+    lv_obj_set_style_text_font(s_io.lbl_dio, UI_FONT_CN, 0);
+    lv_obj_set_style_text_color(s_io.lbl_dio, ui_color(UI_COL_ACCENT), 0);
+    dio_refresh();
+    lv_obj_t *drow = lv_obj_create(td);
+    lv_obj_set_size(drow, lv_pct(100), 28);
+    lv_obj_set_style_bg_opa(drow, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(drow, 0, 0);
+    lv_obj_set_style_pad_all(drow, 0, 0);
+    lv_obj_set_flex_flow(drow, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(drow, 4, 0);
+    make_chip(drow, "MODE", 48, on_dio_mode, false);
+    make_chip(drow, "读", 36, on_dio_read, false);
+    make_chip(drow, "1", 32, on_dio_hi, true);
+    make_chip(drow, "0", 32, on_dio_lo, true);
+    lv_obj_t *dh = lv_label_create(td);
+    lv_label_set_text(dh, "探针默认 GPIO35（以太网拆除空闲脚）");
+    lv_obj_set_style_text_font(dh, UI_FONT_CN, 0);
+    lv_obj_set_style_text_color(dh, ui_color(UI_COL_TEXT_DIM), 0);
+    lv_label_set_long_mode(dh, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(dh, lv_pct(100));
+
+    /* 1-Wire */
+    lv_obj_set_style_pad_all(tw, 6, 0);
+    lv_obj_set_flex_flow(tw, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(tw, 8, 0);
+    s_io.lbl_ow = lv_label_create(tw);
+    lv_obj_set_style_text_font(s_io.lbl_ow, UI_FONT_CN, 0);
+    lv_obj_set_style_text_color(s_io.lbl_ow, ui_color(UI_COL_ACCENT), 0);
+    lv_label_set_text(s_io.lbl_ow, "1-Wire 与 DIO 共用脚");
+    lv_label_set_long_mode(s_io.lbl_ow, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(s_io.lbl_ow, lv_pct(100));
+    lv_obj_t *wrow = lv_obj_create(tw);
+    lv_obj_set_size(wrow, lv_pct(100), 28);
+    lv_obj_set_style_bg_opa(wrow, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(wrow, 0, 0);
+    lv_obj_set_style_pad_all(wrow, 0, 0);
+    lv_obj_set_flex_flow(wrow, LV_FLEX_FLOW_ROW);
+    make_chip(wrow, "SCAN", 56, on_ow_scan, true);
+    lv_obj_t *wh = lv_label_create(tw);
+    lv_label_set_text(wh, "接 DQ→GPIO35，外加 4.7k 上拉到 3.3V");
+    lv_obj_set_style_text_font(wh, UI_FONT_CN, 0);
+    lv_obj_set_style_text_color(wh, ui_color(UI_COL_TEXT_DIM), 0);
+    lv_label_set_long_mode(wh, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(wh, lv_pct(100));
+
     (void)siggen_pwm_init();
     (void)bus_adc_init();
+    (void)bus_dio_init(BUS_DIO_GPIO_DEFAULT);
+    (void)bus_ow_init(bus_dio_get_gpio());
     paint_pwm_btns();
 
     return s_io.root;
@@ -680,6 +887,10 @@ void ui_page_io_update(void)
                 lv_chart_set_series_value_by_id(s_io.chart_adc, s_io.ser_adc, i, v);
             }
             lv_chart_refresh(s_io.chart_adc);
+        }
+    } else if (tab == IO_TAB_DIO) {
+        if ((s_div & 3u) == 0u) {
+            dio_refresh();
         }
     }
 }

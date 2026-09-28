@@ -14,11 +14,18 @@ idf_component_register(
         "bus/bus_decode.c"
         "bus/bus_capture.c"
         "bus/bus_logger.c"
+        "bus/bus_tools.c"
+        "bus/bus_cli.c"
+        "bus/bus_dio.c"
+        "bus/bus_onewire.c"
+        "bus/bus_nvs.c"
         "siggen/siggen_pwm.c"
         "adc/bus_adc.c"
         "net/wifi_bringup.c"
         "net/wifi_nvs.c"
         "net/bus_stream.c"
+        "net/bus_web.c"
+        "net/bus_cli_io.c"
         "ui/ui_shell.c"
         "ui/ui_frame_list.c"
         "ui/ui_scope.c"
@@ -57,4 +64,6 @@ idf_component_register(
         esp_mm
         lwip
         fatfs
+        esp_http_server
+        esp_driver_usb_serial_jtag
 )

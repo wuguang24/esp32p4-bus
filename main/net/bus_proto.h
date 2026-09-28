@@ -22,6 +22,7 @@ typedef enum {
     BUS1_TYPE_CMD   = 3,
     BUS1_TYPE_ACK   = 4,
     BUS1_TYPE_HELLO = 5,
+    BUS1_TYPE_TEXT  = 6,  /* 文本行（CLI 输出等），payload 为 UTF-8 */
 } bus1_type_t;
 
 typedef enum {
@@ -37,6 +38,7 @@ typedef enum {
     BUS1_CMD_UART_SEND      = 10,
     BUS1_CMD_I2C_SCAN       = 11,
     BUS1_CMD_SET_LISTEN     = 12,
+    BUS1_CMD_CLI            = 13,  /* data[] = 文本命令，应答走 TYPE_TEXT */
 } bus1_cmd_id_t;
 
 typedef struct __attribute__((packed)) {

@@ -12,6 +12,8 @@
 #include "bus_capture.h"
 #include "bus_decode.h"
 #include "bus_framer.h"
+#include "bus_pins.h"
+#include "bus_tools.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -234,6 +236,51 @@ static void on_clear(lv_event_t *e)
     ui_frame_list_clear(&s_bp.list_485);
     if (s_bp.detail) {
         lv_label_set_text(s_bp.detail, "点选帧查看解码");
+    }
+}
+
+static void on_can_auto(lv_event_t *e)
+{
+    (void)e;
+    if (s_bp.detail) {
+        ui_label_set_if_changed(s_bp.detail, "CAN 波特率探测中…");
+    }
+    uint32_t baud = 0;
+    esp_err_t err = bus_tools_can_autodetect(&baud, 180);
+    if (s_bp.detail) {
+        char buf[56];
+        if (err == ESP_OK) {
+            snprintf(buf, sizeof(buf), "CAN 探测 OK %lu", (unsigned long)baud);
+        } else if (err == ESP_ERR_NOT_FOUND) {
+            snprintf(buf, sizeof(buf), "CAN 无明确信号 保持 %lu", (unsigned long)baud);
+        } else {
+            snprintf(buf, sizeof(buf), "CAN 探测失败");
+        }
+        ui_label_set_if_changed(s_bp.detail, buf);
+    }
+}
+
+static void on_rs485_auto(lv_event_t *e)
+{
+    (void)e;
+    if (s_bp.detail) {
+        ui_label_set_if_changed(s_bp.detail, "RS485 波特率探测中…");
+    }
+    uint32_t baud = 0;
+    bus_rs485_parity_t p = BUS_RS485_PARITY_NONE;
+    esp_err_t err = bus_tools_rs485_autodetect(&baud, &p, 100);
+    if (s_bp.detail) {
+        char buf[64];
+        const char *pn = (p == BUS_RS485_PARITY_EVEN) ? "E" :
+                         (p == BUS_RS485_PARITY_ODD) ? "O" : "N";
+        if (err == ESP_OK) {
+            snprintf(buf, sizeof(buf), "485 探测 OK %lu 8%s1", (unsigned long)baud, pn);
+        } else if (err == ESP_ERR_NOT_FOUND) {
+            snprintf(buf, sizeof(buf), "485 无信号 保持 %lu", (unsigned long)baud);
+        } else {
+            snprintf(buf, sizeof(buf), "485 探测失败");
+        }
+        ui_label_set_if_changed(s_bp.detail, buf);
     }
 }
 
@@ -704,6 +751,8 @@ lv_obj_t *ui_page_bus_create(lv_obj_t *parent)
     s_bp.btn_tx = make_chip(filt, "TX", 36, on_filt_tx, false);
     s_bp.btn_err = make_chip(filt, "ERR", 40, on_filt_err, false);
     make_chip(filt, "ID", 36, on_filt_id, false);
+    make_chip(filt, "CA", 36, on_can_auto, true);
+    make_chip(filt, "4A", 36, on_rs485_auto, true);
     make_chip(filt, "重放", 44, on_replay, true);
     s_bp.btn_period = make_chip(filt, "周期", 48, on_period, false);
     paint_filt_btns();

@@ -1,41 +1,69 @@
 ================================================================================
   ESP32P4_BUS_ANALYZER  项目使用说明
-  更新日期：2026-09-04
+  更新日期：2026-09-28
 ================================================================================
 
 一、做什么
 --------------------------------------------------------------------------------
 慧勤智远 ESP32-P4 上的总线通信分析仪：
   CAN(TJA1050) / RS485(TP8485E) / TTL UART / I2C / SPI
-  PWM 输出 GPIO11 / ADC 采样 GPIO20
+  PWM 输出 GPIO11 / ADC 采样 GPIO20 / DIO·1-Wire GPIO35
   3.5″ LVGL 触摸屏监视
-  SD 卡 CSV 录制
-  WiFi SoftAP + BUS1 UDP 上位机（端口 9527）
+  SD 卡 CSV 录制（Web /files 可下载）
+  WiFi SoftAP + BUS1 UDP 上位机（端口 9527，含 CMD_CLI）
+  文本 CLI：浏览器 http://192.168.4.1 / TCP:2323 / USB Serial-JTAG
 
 已移除：FOC 电机控制、片内以太网 DP83848。
 
 
 二、启动顺序
 --------------------------------------------------------------------------------
-  NVS → WiFi → LVGL → bus_app → PWM/ADC init → bus_stream（UDP）
+  NVS → WiFi → LVGL → bus_app → PWM/ADC → bus_stream(UDP)
+  → bus_web(HTTP:80) → bus_cli_io(USB/TCP:2323)
 
 
 三、界面
 --------------------------------------------------------------------------------
-  通信 | CAN/485 | 串口 | 扩展(I2C/SPI/PWM/ADC) | 设置
-  参数输入：点波特率 / PWM 频率·占空比 → 弹出数字键盘（OK 确认）
+  通信 | CAN/485 | 串口 | 扩展(I2C/SPI/PWM/ADC/DIO/1W) | 设置
+  串口页 AUTO：波特率自动探测（需线上有数据）
+  CAN/485 页 / 设置页 AUTO：CAN / RS485 波特率探测（RS485 兼试校验；需有流量）
+  改参自动写入 NVS；设置页「默认」或 CLI `cfg reset` 恢复出厂
+  扩展 I2C：ID 识别名、DUMP 寄存器块
+  扩展 SPI：JEDEC、READ Flash(0x03)
+  扩展 DIO/1W：GPIO35 探针读写 / 1-Wire 扫描
+  参数输入：点波特率 / PWM → 数字键盘
 
 
 四、上位机
 --------------------------------------------------------------------------------
   WiFi 连 ESP32P4-BUS / 12345678
-  python tools/bus1_listen.py 192.168.4.1
-  配对令牌：bus1-pair-2026
+  浏览器打开 http://192.168.4.1  → Web CLI；页面可下载 SD csv
+  TCP：python tools/bus_cli_tcp.py 192.168.4.1
+  UDP：python tools/bus1_listen.py 192.168.4.1
+  配对令牌：bus1-pair-2026；BUS1_CMD_CLI(13) 可发文本命令，回 TEXT 包
 
 
-五、接线
+五、CLI 常用命令
+--------------------------------------------------------------------------------
+  help / status / clear
+  allow_tx on|off    listen on|off
+  uart auto | uart baud 115200 | uart send 41 54 0D 0A
+  can baud 500000 | can auto | can send 123 01 02 03
+  rs485 baud 9600 | rs485 auto | rs485 send 010300000001
+  i2c scan | i2c id | i2c dump 50 00 16 1
+  spi jedec | spi read 000000 16
+  dio mode in|out|pu|pd | dio read | dio write 0|1
+  ow scan | ow rom
+  logger start|stop | sd remount
+  pwm on|off | pwm freq 1000 | pwm duty 50
+  adc
+  cfg save | cfg reset
+
+
+六、接线
 --------------------------------------------------------------------------------
   见 docs/接线表.txt
-  注意：SPI CS 已改为 GPIO12（GPIO20 专供 ADC）
+  DIO/1-Wire 默认 GPIO35；1-Wire DQ 需 4.7k 上拉到 3.3V
+  CAN/UART/RS485 AUTO：总线需有流量；参数改动后自动记忆到 NVS
 
 ================================================================================

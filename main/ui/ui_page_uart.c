@@ -12,6 +12,7 @@
 #include "bus_capture.h"
 #include "bus_decode.h"
 #include "bus_framer.h"
+#include "bus_tools.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -226,6 +227,27 @@ static void on_send(lv_event_t *e)
     if (s_up.detail) {
         ui_label_set_if_changed(s_up.detail,
                                 (err == ESP_OK) ? "UART TX OK" : "UART TX 失败");
+    }
+}
+
+static void on_uart_auto(lv_event_t *e)
+{
+    (void)e;
+    if (s_up.detail) {
+        ui_label_set_if_changed(s_up.detail, "波特率探测中…");
+    }
+    uint32_t baud = 0;
+    esp_err_t err = bus_tools_uart_autodetect(&baud, 100);
+    if (s_up.detail) {
+        char buf[48];
+        if (err == ESP_OK) {
+            snprintf(buf, sizeof(buf), "探测 OK %lu", (unsigned long)baud);
+        } else if (err == ESP_ERR_NOT_FOUND) {
+            snprintf(buf, sizeof(buf), "无明确信号 保持 %lu", (unsigned long)baud);
+        } else {
+            snprintf(buf, sizeof(buf), "探测失败");
+        }
+        ui_label_set_if_changed(s_up.detail, buf);
     }
 }
 
@@ -453,6 +475,7 @@ lv_obj_t *ui_page_uart_create(lv_obj_t *parent)
     s_up.btn_tx = make_chip(filt, "TX", 36, on_filt_tx, false);
     s_up.btn_err = make_chip(filt, "ERR", 40, on_filt_err, false);
     make_chip(filt, "重放", 44, on_replay, true);
+    make_chip(filt, "AUTO", 48, on_uart_auto, true);
     paint_filt();
 
     lv_obj_t *frm = lv_obj_create(s_up.root);

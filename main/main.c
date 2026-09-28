@@ -14,6 +14,10 @@
 #include "bus_proto.h"
 #include "siggen_pwm.h"
 #include "bus_adc.h"
+#include "bus_web.h"
+#include "bus_cli_io.h"
+#include "bus_dio.h"
+#include "bus_onewire.h"
 
 static const char *TAG = "main";
 
@@ -45,8 +49,19 @@ void app_main(void)
     if (bus_adc_init() == ESP_OK) {
         ESP_LOGI(TAG, "ADC GPIO%d ready", (int)bus_adc_get_gpio());
     }
+    if (bus_dio_init(BUS_DIO_GPIO_DEFAULT) == ESP_OK) {
+        ESP_LOGI(TAG, "DIO GPIO%d ready", (int)bus_dio_get_gpio());
+    }
+    (void)bus_ow_init(bus_dio_get_gpio());
 
     if (bus_stream_start() == ESP_OK) {
         ESP_LOGI(TAG, "BUS1 UDP :%d", BUS1_UDP_PORT);
+    }
+
+    if (bus_web_start() == ESP_OK) {
+        ESP_LOGI(TAG, "Web CLI http://192.168.4.1/");
+    }
+    if (bus_cli_io_start() == ESP_OK) {
+        ESP_LOGI(TAG, "CLI IO USB/TCP:2323");
     }
 }
